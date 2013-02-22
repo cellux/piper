@@ -1145,8 +1145,13 @@ function uv.watch(type, cb, data)
       end
       if res == "stop" then
          watcher_functions[type].stop(w)
-         data._h:free()
-         watcher_data[wi] = nil
+         local function close_cb(w)
+           data._h:free()
+           data._close_h:free()
+           watcher_data[wi] = nil
+         end
+         data._close_h = ffi.cast("uv_close_cb", close_cb)
+         uv.uv_close(ffi.cast("uv_handle_t*", w), data._close_h)
       end
       wake_up_if_waiting(wi)
    end
