@@ -38,7 +38,7 @@ function loaders.jpeg(path)
    function loader.read_image(target)
       print("jpeg_start_decompress")
       jpeg.jpeg_start_decompress(cinfo)
-      print(string.format("allocating jsamprow: output_width=%d, output_components=%d", cinfo.output_width, cinfo.output_components))
+      --print(string.format("allocating jsamprow: output_width=%d, output_components=%d", cinfo.output_width, cinfo.output_components))
       local jsamprow = ffi.new("JSAMPLE[?]", cinfo.output_width * cinfo.output_components)
       local jsamparray = ffi.new("JSAMPROW[1]", jsamprow)
       assert(tonumber(jsamparray[0]) == tonumber(jsamprow))
@@ -51,7 +51,7 @@ function loaders.jpeg(path)
          --print("process scanline")
          target.process_scanline(jsamprow)
       until lines_read == cinfo.output_height
-      print("jpeg_finish_decompress")
+      --print("jpeg_finish_decompress")
       jpeg.jpeg_finish_decompress(cinfo)
    end
    function loader.free()
@@ -86,10 +86,7 @@ end
 
 function targets.dispmanx_resource(image_info)
    local native_image_handle = ffi.new("uint32_t[1]")
-   print(string.format("vc_dispmanx_resource_create(%d,%d,%d)",
-                       tonumber(image_info.type),
-                       image_info.width,
-                       image_info.height))
+   --print(string.format("vc_dispmanx_resource_create(%d,%d,%d)", tonumber(image_info.type), image_info.width, image_info.height))
    local res = bcm_host.vc_dispmanx_resource_create(image_info.type,
                                                     image_info.width,
                                                     image_info.height,
@@ -101,7 +98,6 @@ function targets.dispmanx_resource(image_info)
    local target = {}
    function target.process_scanline(line)
       local src_address = line - src_pitch*copy_rect.y
-      assert(src_address + src_pitch*copy_rect.y == line)
       --print(string.format("target.process_scanline: src_type=%s,src_pitch=%s,dst_rect=(%d,%d,%d,%d)", src_type, src_pitch, copy_rect.x, copy_rect.y, copy_rect.width, copy_rect.height))
       local rv = bcm_host.vc_dispmanx_resource_write_data(res,
                                                           src_type,
@@ -115,8 +111,8 @@ function targets.dispmanx_resource(image_info)
       local rect = ffi.new("VC_RECT_T",
                            0,
                            0,
-                           bit.lshift(image_info.width,16),
-                           bit.lshift(image_info.height,16))
+                           image_info.width,
+                           image_info.height)
       return res, rect
    end
    return target
@@ -133,21 +129,18 @@ end
 local image = {}
 
 function image.load(path, target_type)
-   print("build_loader("..path..")")
    local loader = build_loader(path)
-   print("loader.read_image_info()")
-   local image_info = loader.read_image_info()
-   print("image_info.width = "..tostring(image_info.width))
-   print("image_info.height = "..tostring(image_info.height))
-   print("image_info.type = "..tonumber(image_info.type))
-   print("build_target("..target_type..",image_info")
-   local target = build_target(target_type, image_info)
-   print("read_image(target)")
-   loader.read_image(target)
-   print("loader.free()")
+   local function l()
+      local image_info = loader.read_image_info()
+      local target = build_target(target_type, image_info)
+      loader.read_image(target)
+      return target.data()
+   end
+   local res = { pcall(l) }
+   local status = res[1]
+   assert(status)
    loader.free()
-   print("returning target.data()")
-   return target.data()
+   return unpack(res, 2)
 end
 
 return image

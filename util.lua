@@ -5,7 +5,6 @@ unsigned int sleep (unsigned int seconds);
 int getchar(void);
 ]]
 
--- bcm_host depends on vcos
 local util = {}
 
 util.sleep = ffi.C.sleep

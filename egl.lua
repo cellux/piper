@@ -239,13 +239,6 @@ require("lib.GLESv2") -- EGL depends on stuff in libGLESv2.so
 local egl = setmetatable({_NAME="egl"},
                          { __index = require("lib.EGL") })
 
-local function egl_name(s)
-   if s:sub(1,4) ~= "EGL_" then
-      s = "EGL_"..s
-   end
-   return s
-end
-
 function egl.queryString(dpy, name)
    local s = egl.eglQueryString(dpy, name)
    return ffi.string(s)
@@ -494,6 +487,13 @@ local function make_tostring(display, descriptors)
 end
 
 --- config ---
+
+local function egl_name(s)
+   if s:sub(1,4) ~= "EGL_" then
+      s = "EGL_"..s
+   end
+   return s
+end
 
 ffi.cdef [[
 typedef struct {

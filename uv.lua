@@ -1090,6 +1090,7 @@ const char* uv_dlerror(uv_lib_t* lib);
 
 ]]
 
+ffi.load('libpthread.so.0', true)
 local uv = setmetatable({_NAME="uv"},
                         { __index = ffi.load("uv") })
 
@@ -1159,7 +1160,6 @@ function uv.watch(type, cb, data)
    watcher_data[wi] = data
    return w
 end
-jit.off(uv.watch, true)
 
 local function last_error()
    return ffi.string(uv.uv_strerror(uv.uv_last_error(loop)))
