@@ -879,6 +879,16 @@ typedef enum {
   O_PATH      = 010000000, /* Resolve pathname but do not open file */
 } open_flags;
 
+/* file types */
+
+static const int S_IFSOCK   = 0140000;   /* socket */
+static const int S_IFLNK    = 0120000;   /* symbolic link */
+static const int S_IFREG    = 0100000;   /* regular file */
+static const int S_IFBLK    = 0060000;   /* block device */
+static const int S_IFDIR    = 0040000;   /* directory */
+static const int S_IFCHR    = 0020000;   /* character device */
+static const int S_IFIFO    = 0010000;   /* FIFO */
+
 typedef enum {
   S_ISUID  = 04000,   /* Set user ID on execution.  */
   S_ISGID  = 02000,   /* Set group ID on execution.  */
@@ -1286,6 +1296,102 @@ function uv.fs_rename(path, new_path)
       return uv.uv_fs_rename(loop, w, path, new_path, h)
    end
    return fs_func("fs_rename", start_fn)
+end
+
+function uv.fs_stat(path)
+   local function start_fn(loop, w, h)
+      return uv.uv_fs_stat(loop, w, path, h)
+   end
+   local function ret_fn(w)
+      local statbuf = ffi.new("struct stat", w[0].statbuf)
+      return statbuf
+   end
+   return fs_func("fs_stat", start_fn, ret_fn)
+end
+
+local function file_type(statbuf)
+   local m = statbuf.st_mode
+   local type = '?'
+   if bit.band(m, uv.S_IFREG) > 0 then
+      type = '-'
+   elseif bit.band(m, uv.S_IFDIR) > 0 then
+      type = 'd'
+   elseif bit.band(m, uv.S_IFSOCK) > 0 then
+      type = 's'
+   elseif bit.band(m, uv.S_IFLNK) > 0 then
+      type = 'l'
+   elseif bit.band(m, uv.S_IFBLK) > 0 then
+      type = 'b'
+   elseif bit.band(m, uv.S_IFCHR) > 0 then
+      type = 'c'
+   elseif bit.band(m, uv.S_IFIFO) > 0 then
+      type = 'p'
+   end
+   return type
+end
+
+function uv.stat(path)
+   local statbuf = uv.fs_stat(path)
+   local statinfo = {}
+   statinfo.dev = tonumber(statbuf.st_dev)
+   statinfo.mode = statbuf.st_mode
+   statinfo.nlink = statbuf.st_nlink
+   statinfo.uid = statbuf.st_uid
+   statinfo.gid = statbuf.st_gid
+   statinfo.rdev = tonumber(statbuf.st_rdev)
+   statinfo.size = tonumber(statbuf.st_size)
+   statinfo.blksize = statbuf.st_blksize
+   statinfo.blocks = tonumber(statbuf.st_blocks)
+   statinfo.atime = statbuf.st_atim.tv_sec
+   statinfo.mtime = statbuf.st_mtim.tv_sec
+   statinfo.ctime = statbuf.st_ctim.tv_sec
+   statinfo.inode = tonumber(statbuf.st_ino)
+   statinfo.type = file_type(statbuf)
+   return statinfo
+end
+
+function uv.file_type(path)
+   local statbuf = uv.fs_stat(path)
+   return file_type(statbuf)
+end
+
+function uv.find_files(path, filter)
+   local function f(s)
+      local dir = s.dirs[s.ndir]
+      dir.nfile = dir.nfile + 1
+      local file = dir[dir.nfile]
+      if not file then
+         if s.ndir > 1 then
+            table.remove(s.dirs, s.ndir)
+            s.ndir = s.ndir - 1
+            return f(s)
+         else
+            return nil
+         end
+      else
+         local path = dir.path.."/"..file
+         local info = uv.stat(path)
+         if info.type=='d' then
+            local newdir = uv.fs_readdir(path)
+            newdir.nfile = 0
+            newdir.path = path
+            table.insert(s.dirs, newdir)
+            s.ndir = s.ndir + 1
+            return f(s)
+         else
+            if filter then
+               return filter(path, info) and path or f(s)
+            else
+               return path
+            end
+         end
+      end
+   end
+   local topdir = uv.fs_readdir(path)
+   topdir.nfile = 0
+   topdir.path = path
+   local s = { dirs = { topdir }, ndir = 1 }
+   return f,s
 end
 
 function uv.sleep(seconds)
