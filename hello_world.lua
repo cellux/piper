@@ -3,6 +3,7 @@
 local ffi = require("ffi")
 local bit = require("bit")
 local bcm_host = require("bcm_host")
+local dispmanx = require("dispmanx")
 local egl = require("egl")
 local vg = require("vg")
 local util = require("util")
@@ -38,28 +39,21 @@ function main(dpy)
    assert(egl.queryAPI() == egl.EGL_OPENVG_API)
    print("bound OpenVG_API")
 
-   local ctx = egl.createContext(dpy, config)
+   local ctx = egl.context(dpy, config)
    print("created EGL context (OpenVG)")
    print(ctx)
 
    local dmx = {}
-   dmx.dpy = bcm_host.vc_dispmanx_display_open(0)
-   assert(dmx.dpy ~= bcm_host.DISPMANX_NO_HANDLE, "vc_dispmanx_display_open() failed")
-   dmx.info = ffi.new("DISPMANX_MODEINFO_T")
-   local rv = bcm_host.vc_dispmanx_display_get_info(dmx.dpy, dmx.info)
-   assert(rv==0, "vc_dispmanx_display_get_info() failed")
+   dmx.dpy = dispmanx.display()
+   assert(dmx.dpy, "vc_dispmanx_display_open() failed")
+   dmx.info = dmx.dpy:get_info()
    print(string.format("(dispmanx) display width=%d", dmx.info.width))
    print(string.format("(dispmanx) display height=%d", dmx.info.height))
-   local u = bcm_host.vc_dispmanx_update_start(0)
-   assert(u ~= bcm_host.DISPMANX_NO_HANDLE, "vc_dispmanx_update_start() failed")
-   dmx.src_rect = ffi.new("VC_RECT_T")
-   bcm_host.vc_dispmanx_rect_set(dmx.src_rect,
-                                 0,
-                                 0,
-                                 dmx.info.width,
-                                 dmx.info.height)
-   dmx.dest_rect = ffi.new("VC_RECT_T", dmx.src_rect)
-   dmx.element = bcm_host.vc_dispmanx_element_add(
+   local u = dispmanx.update()
+   assert(u, "vc_dispmanx_update_start() failed")
+   dmx.src_rect = dispmanx.rect(0, 0, dmx.info.width, dmx.info.height)
+   dmx.dest_rect = dmx.src_rect
+   dmx.element = dispmanx.element(
       u,                                 -- update
       dmx.dpy,                           -- display
       0,                                 -- layer
@@ -70,23 +64,17 @@ function main(dpy)
       nil,                               -- alpha
       nil,                               -- clamp
       bcm_host.DISPMANX_NO_ROTATE)       -- transform
-   assert(dmx.element ~= bcm_host.DISPMANX_NO_HANDLE, "vc_dispmanx_element_add() failed")
-   print(string.format("dispmanx.element = 0x%x",dmx.element))
-   local rv = bcm_host.vc_dispmanx_update_submit_sync(u)
+   assert(dmx.element, "vc_dispmanx_element_add() failed")
+   print(string.format("dispmanx.element = %s",dmx.element))
+   local rv = u:submit_sync()
    assert(rv==0, "vc_dispmanx_update_submit_sync() failed")
 
    dmx.egl_window = ffi.new("EGL_DISPMANX_WINDOW_T", 
-                            dmx.element,
+                            dmx.element.e,
                             dmx.info.width,
                             dmx.info.height)
-   print(string.format("dmx.egl_window = 0x%x/%d/%d",
-                       dmx.egl_window.element,
-                       dmx.egl_window.width,
-                       dmx.egl_window.height))
 
-   local s = egl.createWindowSurface(dpy,
-                                     config,
-                                     dmx.egl_window)
+   local s = egl.window_surface(dpy, config, dmx.egl_window)
    print("created EGL surface")
    print(s)
    assert(s.RENDER_BUFFER == egl.EGL_BACK_BUFFER)
@@ -95,30 +83,19 @@ function main(dpy)
       egl.bindAPI(egl.EGL_OPENGL_ES_API)
       assert(egl.queryAPI() == egl.EGL_OPENGL_ES_API)
       print("bound OpenGL_ES_API")
-      local ctx = egl.createContext(dpy, config)
+      local ctx = egl.context(dpy, config)
       print("created EGL context (OpenGL_ES)")
       print(ctx)
-      egl.makeCurrent(dpy, s, s, ctx)
+      ctx:makeCurrent(s, s)
       print("EGL context (OpenGL_ES) made current")
       print(ctx)
-      assert(egl.getCurrentDisplay()==dpy)
-      assert(egl.getCurrentContext(dpy)==ctx)
-      assert(egl.getCurrentSurface(dpy, egl.EGL_DRAW)==s)
-      assert(egl.getCurrentSurface(dpy, egl.EGL_READ)==s)
-      egl.destroyContext(dpy, ctx)
+      ctx:destroy()
       print("destroyed EGL context (OpenGL_ES)")
    end
 
-   egl.makeCurrent(dpy, s, s, ctx)
+   ctx:makeCurrent(s, s)
    print("EGL context (OpenVG) made current")
    print(ctx)
-   --[[
-   for _,n in ipairs({"VENDOR","RENDERER","VERSION","EXTENSIONS"}) do
-      local i = vg["VG_"..n]
-      local s = vg.vgGetString(i)
-      -- for some reason, we get NULLs here
-   end
-   ]]--
    vg.vgSeti(vg.VG_SCISSORING, vg.VG_FALSE)
    vg.vgSeti(vg.VG_MASKING, vg.VG_FALSE)
    local clearColor = ffi.new("VGfloat[4]", 0.33,0,0,1)
@@ -200,11 +177,11 @@ function main(dpy)
    util.getchar()
    vg.vgDestroyPaint(paint)
    vg.vgDestroyPath(path)
-   egl.destroyContext(dpy, ctx)
+   ctx:destroy()
    print("destroyed EGL (OpenVG) context")
-   egl.destroySurface(dpy, s)
+   s:destroy()
    print("destroyed EGL surface")
-   bcm_host.vc_dispmanx_display_close(dmx.dpy)
+   dmx.dpy:close()
 end
 
 bcm_host.wrap(egl.wrap(main))()

@@ -1,6 +1,7 @@
 local ffi = require("ffi")
 
 local bcm_host = require("bcm_host")
+local dispmanx = require("dispmanx")
 local egl = require("egl")
 local vg = require("vg")
 local uv = require("uv")
@@ -34,29 +35,25 @@ local function main(dpy)
    egl_config = egl.chooseConfig(dpy, egl_config_limits)
 
    egl.bindAPI(egl.EGL_OPENGL_ES_API)
-   gl_context = egl.createContext(dpy, egl_config)
+   gl_context = egl.context(dpy, egl_config)
    egl.bindAPI(egl.EGL_OPENVG_API)
-   vg_context = egl.createContext(dpy, egl_config)
+   vg_context = egl.context(dpy, egl_config)
 
-   dmx.dpy = bcm_host.vc_dispmanx_display_open(0)
-   assert(dmx.dpy ~= bcm_host.DISPMANX_NO_HANDLE, "vc_dispmanx_display_open() failed")
+   dmx.dpy = dispmanx.display()
+   assert(dmx.dpy, "vc_dispmanx_display_open() failed")
 
-   dmx.info = ffi.new("DISPMANX_MODEINFO_T")
-   local rv = bcm_host.vc_dispmanx_display_get_info(dmx.dpy, dmx.info)
-   assert(rv==0, "vc_dispmanx_display_get_info() failed")
+   dmx.info = dmx.dpy:get_info()
 
-   local u = bcm_host.vc_dispmanx_update_start(0)
-   assert(u ~= bcm_host.DISPMANX_NO_HANDLE, "vc_dispmanx_update_start() failed")
+   local u = dispmanx.update()
+   assert(u, "vc_dispmanx_update_start() failed")
 
-   dmx.src_rect = ffi.new("VC_RECT_T")
-   bcm_host.vc_dispmanx_rect_set(dmx.src_rect,
-                                 0,
-                                 0,
-                                 dmx.info.width,
-                                 dmx.info.height)
+   dmx.src_rect = dispmanx.rect(0,
+                                0,
+                                dmx.info.width,
+                                dmx.info.height)
    dmx.dest_rect = dmx.src_rect
 
-   dmx.element = bcm_host.vc_dispmanx_element_add(
+   dmx.element = dispmanx.element(
       u,                                 -- update
       dmx.dpy,                           -- display
       0,                                 -- layer
@@ -67,24 +64,24 @@ local function main(dpy)
       nil,                               -- alpha
       nil,                               -- clamp
       bcm_host.DISPMANX_NO_ROTATE)       -- transform
-   assert(dmx.element ~= bcm_host.DISPMANX_NO_HANDLE, "vc_dispmanx_element_add() failed")
+   assert(dmx.element, "vc_dispmanx_element_add() failed")
 
-   local rv = bcm_host.vc_dispmanx_update_submit_sync(u)
+   local rv = u:submit_sync()
    assert(rv==0, "vc_dispmanx_update_submit_sync() failed")
 
    dmx.egl_window = ffi.new("EGL_DISPMANX_WINDOW_T", 
-                            dmx.element,
+                            dmx.element.e,
                             dmx.info.width,
                             dmx.info.height)
 
-   egl_surface = egl.createWindowSurface(dpy,
-                                         egl_config,
-                                         dmx.egl_window)
+   egl_surface = egl.window_surface(dpy,
+                                    egl_config,
+                                    dmx.egl_window)
 
    egl.bindAPI(egl.EGL_OPENGL_ES_API)
-   egl.makeCurrent(dpy, egl_surface, egl_surface, gl_context)
+   gl_context:makeCurrent(egl_surface, egl_surface)
    egl.bindAPI(egl.EGL_OPENVG_API)
-   egl.makeCurrent(dpy, egl_surface, egl_surface, vg_context)
+   vg_context:makeCurrent(egl_surface, egl_surface)
    vg.vgSetfv(vg.VG_CLEAR_COLOR, 4, ffi.new("VGfloat[4]", 0,0,0,1))
    vg.vgClear(0,0,dmx.info.width,dmx.info.height)
    egl.swapBuffers(egl_display, egl_surface)
@@ -99,18 +96,18 @@ local function main(dpy)
    end
    print("leaving avloop")
 
-   egl.destroySurface(dpy, egl_surface)
-   egl.destroyContext(dpy, gl_context)
-   egl.destroyContext(dpy, vg_context)
+   egl_surface:destroy()
+   gl_context:destroy()
+   vg_context:destroy()
 
-   local u = bcm_host.vc_dispmanx_update_start(0)
-   assert(u ~= bcm_host.DISPMANX_NO_HANDLE)
-   local rv = bcm_host.vc_dispmanx_element_remove(u, dmx.element)
+   local u = dispmanx.update()
+   assert(u)
+   local rv = dmx.element:remove(u)
    assert(rv == 0)
-   local rv = bcm_host.vc_dispmanx_update_submit_sync(u)
+   local rv = u:submit_sync()
    assert(rv == 0)
 
-   bcm_host.vc_dispmanx_display_close(dmx.dpy)
+   dmx.dpy:close()
 end
 
 local avloop = {}

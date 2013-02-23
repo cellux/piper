@@ -1,6 +1,7 @@
 local ffi = require("ffi")
 local bit = require("bit")
 local bcm_host = require("bcm_host")
+local dispmanx = require("dispmanx")
 local jpeg = require("jpeg")
 
 ffi.cdef [[
@@ -8,7 +9,7 @@ typedef struct {
   uint32_t width;
   uint32_t height;
   VC_IMAGE_TYPE_T type;
-} piper_image_ImageInfo;
+} piper_image_info;
 ]]
 
 local loaders = {}
@@ -23,7 +24,7 @@ function loaders.jpeg(path)
    local loader = {}
    function loader.read_image_info()
       jpeg.jpeg_read_header(cinfo, true)
-      local image_info = ffi.new("piper_image_ImageInfo")
+      local image_info = ffi.new("piper_image_info")
       image_info.width = cinfo.image_width
       image_info.height = cinfo.image_height
       if cinfo.num_components == 1 then
@@ -85,34 +86,26 @@ local function image_type_to_component_size(type)
 end
 
 function targets.dispmanx_resource(image_info)
-   local native_image_handle = ffi.new("uint32_t[1]")
-   --print(string.format("vc_dispmanx_resource_create(%d,%d,%d)", tonumber(image_info.type), image_info.width, image_info.height))
-   local res = bcm_host.vc_dispmanx_resource_create(image_info.type,
-                                                    image_info.width,
-                                                    image_info.height,
-                                                    native_image_handle)
-   assert(res ~= bcm_host.DISPMANX_NO_HANDLE)
+   local res = dispmanx.resource(image_info.type,
+                                 image_info.width,
+                                 image_info.height)
+   assert(res)
    local src_type = image_info.type
    local src_pitch = image_info.width * image_type_to_component_size(image_info.type)
-   local copy_rect = ffi.new("VC_RECT_T", 0, 0, image_info.width, 1)
+   local copy_rect = dispmanx.rect(0, 0, image_info.width, 1)
    local target = {}
    function target.process_scanline(line)
       local src_address = line - src_pitch*copy_rect.y
-      --print(string.format("target.process_scanline: src_type=%s,src_pitch=%s,dst_rect=(%d,%d,%d,%d)", src_type, src_pitch, copy_rect.x, copy_rect.y, copy_rect.width, copy_rect.height))
-      local rv = bcm_host.vc_dispmanx_resource_write_data(res,
-                                                          src_type,
-                                                          src_pitch,
-                                                          src_address,
-                                                          copy_rect)
+      --print(string.format("target.process_scanline: src_type=%s,src_pitch=%s,dst_rect=%s", src_type, src_pitch, copy_rect))
+      local rv = res:write_data(src_type,
+                                src_pitch,
+                                src_address,
+                                copy_rect)
       assert(rv==0)
       copy_rect.y = copy_rect.y + 1
    end
    function target.data()
-      local rect = ffi.new("VC_RECT_T",
-                           0,
-                           0,
-                           image_info.width,
-                           image_info.height)
+      local rect = dispmanx.rect(0,0,image_info.width,image_info.height)
       return res, rect
    end
    return target
@@ -137,8 +130,8 @@ function image.load(path, target_type)
       return target.data()
    end
    local res = { pcall(l) }
-   local status = res[1]
-   assert(status)
+   local status, err = unpack(res,1,2)
+   assert(status, err)
    loader.free()
    return unpack(res, 2)
 end

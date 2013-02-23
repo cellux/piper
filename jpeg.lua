@@ -1187,7 +1187,7 @@ static const int JPEG_COM  = 0xFE; /* COM marker code */
 
 ]]
 
-local jpeg = setmetatable({ _NAME="jpeg" },
+local jpeg = setmetatable({ _NAME = "jpeg" },
                           { __index = ffi.load("jpeg") })
 
 function jpeg.jpeg_create_compress(cinfo)
