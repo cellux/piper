@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local jit = require("jit")
+local bit = require("bit")
 
 ffi.cdef [[
 typedef enum {
@@ -817,42 +817,43 @@ typedef enum {
 typedef unsigned int __mode_t;
 typedef __mode_t mode_t;
 
-typedef long int __off_t;
-typedef __off_t off_t;
+typedef long long int __quad_t;
+typedef __quad_t __off64_t;
+typedef __off64_t off_t;
 
 typedef unsigned long long int __u_quad_t;
 typedef __u_quad_t __dev_t;
 typedef unsigned long int __ino_t;
+typedef __u_quad_t __ino64_t;
 typedef unsigned int __nlink_t;
 typedef long int __blksize_t;
 typedef long int __blkcnt_t;
+typedef __quad_t __blkcnt64_t;
 
 typedef long int __time_t;
-typedef long int __syscall_slong_t;
 
 struct timespec {
   __time_t tv_sec;
-  __syscall_slong_t tv_nsec;
+  long int tv_nsec;
 };
 
 struct stat {
   __dev_t st_dev;
-  unsigned short int __pad1;
-  __ino_t st_ino;
+  unsigned int __pad1;
+  __ino_t __st_ino;
   __mode_t st_mode;
   __nlink_t st_nlink;
   __uid_t st_uid;
   __gid_t st_gid;
   __dev_t st_rdev;
-  unsigned short int __pad2;
-  __off_t st_size;
+  unsigned int __pad2;
+  __off64_t st_size;
   __blksize_t st_blksize;
-  __blkcnt_t st_blocks;
+  __blkcnt64_t st_blocks;
   struct timespec st_atim;
   struct timespec st_mtim;
   struct timespec st_ctim;
-  unsigned long int __unused4;
-  unsigned long int __unused5;
+  __ino64_t st_ino;
 };
 
 typedef enum {
@@ -1091,7 +1092,7 @@ const char* uv_dlerror(uv_lib_t* lib);
 ]]
 
 ffi.load('libpthread.so.0', true)
-local uv = setmetatable({_NAME="uv"},
+local uv = setmetatable({ _NAME = "uv" },
                         { __index = ffi.load("uv") })
 
 local loop = uv.uv_default_loop()
