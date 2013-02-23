@@ -236,7 +236,7 @@ static const int EGL_CORE_NATIVE_ENGINE = 0x305B;
 ]]
 
 require("lib.GLESv2") -- EGL depends on stuff in libGLESv2.so
-local egl = setmetatable({_NAME="egl"},
+local egl = setmetatable({ _NAME = "egl" },
                          { __index = require("lib.EGL") })
 
 function egl.queryString(dpy, name)
@@ -247,7 +247,7 @@ end
 -- EGL attribute types
 --
 -- there is a constructor for each attribute type
--- which creates a descriptor for display purposes
+-- which creates a descriptor for documentation/stringify purposes
 
 local attr_type = {
    integer = function(n, docstring)
@@ -499,13 +499,13 @@ ffi.cdef [[
 typedef struct {
    EGLDisplay dpy;
    EGLConfig config;
-} piper_egl_EGLConfig_Wrapper;
+} piper_egl_config;
 ]]
 
-local piper_egl_EGLConfig_Wrapper_mt = {
-   __index = function(wrapper,name)
+local piper_egl_config_mt = {
+   __index = function(self,name)
       local v = ffi.new("EGLint[1]")
-      egl.eglGetConfigAttrib(wrapper.dpy, wrapper.config, egl[egl_name(name)], v+0)
+      egl.eglGetConfigAttrib(self.dpy, self.config, egl[egl_name(name)], v+0)
       return v[0]
    end,
    __eq = function(this,that)
@@ -513,7 +513,7 @@ local piper_egl_EGLConfig_Wrapper_mt = {
    end,
    __tostring = make_tostring(attribute_display.config, attribute_descriptors.config),
 }
-ffi.metatype("piper_egl_EGLConfig_Wrapper", piper_egl_EGLConfig_Wrapper_mt)
+ffi.metatype("piper_egl_config", piper_egl_config_mt)
 
 function egl.getConfigs(dpy)
    local n = ffi.new("EGLint[1]")
@@ -524,7 +524,7 @@ function egl.getConfigs(dpy)
    assert(nconfigs==n[0])
    local rv = {}
    for i=1,nconfigs do
-      local c = ffi.new("piper_egl_EGLConfig_Wrapper", dpy, configs[i-1])
+      local c = ffi.new("piper_egl_config", dpy, configs[i-1])
       rv[c.CONFIG_ID] = c
    end
    return rv
@@ -555,7 +555,7 @@ function egl.chooseConfig(dpy, limits)
    if n[0] ~= 1 then
       error("eglChooseConfig(): no suitable configuration found")
    end
-   return ffi.new("piper_egl_EGLConfig_Wrapper", dpy, configs[0])
+   return ffi.new("piper_egl_config", dpy, configs[0])
 end
 
 --- surface ---
@@ -564,13 +564,44 @@ ffi.cdef [[
 typedef struct {
    EGLDisplay dpy;
    EGLSurface surface;
-} piper_egl_EGLSurface_Wrapper;
+} piper_egl_surface;
 ]]
 
-local piper_egl_EGLSurface_Wrapper_mt = {
-   __index = function(wrapper,name)
+local piper_egl_surface_methods = {
+   destroy = function(self)
+      return egl.eglDestroySurface(self.dpy, self.surface)
+   end,
+}
+
+local piper_egl_surface_mt = {
+   __new = function(ct, type, dpy, config, win, attribs)
+      attribs = attribs or {}
+      local nattribs = table_size(attribs)
+      local _attribs = nil
+      if nattribs > 0 then
+         _attribs = ffi.new("EGLint[?]", nattribs*2+1)
+         local i = 0
+         for k,v in pairs(attribs) do
+            _attribs[i] = k
+            _attribs[i+1] = v
+            i=i+2
+         end
+         _attribs[i] = egl.EGL_NONE
+      end
+      local s
+      if type == 'window' then
+         s = egl.eglCreateWindowSurface(dpy, config.config, win, _attribs)
+         assert(s, "eglCreateWindowSurface() failed")
+      else
+         error(string.format("egl.surface constructor called with invalid surface type: %s", type))
+      end
+      return ffi.new("piper_egl_surface", dpy, s)
+   end,
+   __index = function(self,name)
+      local m = piper_egl_surface_methods[name]
+      if m then return m end
       local v = ffi.new("EGLint[1]")
-      egl.eglQuerySurface(wrapper.dpy, wrapper.surface, egl[egl_name(name)], v+0)
+      egl.eglQuerySurface(self.dpy, self.surface, egl[egl_name(name)], v+0)
       return v[0]
    end,
    __eq = function(this,that)
@@ -578,31 +609,11 @@ local piper_egl_EGLSurface_Wrapper_mt = {
    end,
    __tostring = make_tostring(attribute_display.surface, attribute_descriptors.surface),
 }
-ffi.metatype("piper_egl_EGLSurface_Wrapper", piper_egl_EGLSurface_Wrapper_mt)
+ffi.metatype("piper_egl_surface", piper_egl_surface_mt)
+egl.surface = ffi.typeof("piper_egl_surface")
 
-function egl.createWindowSurface(dpy, config, win, attribs)
-   attribs = attribs or {}
-   local nattribs = table_size(attribs)
-   local _attribs = nil
-   if nattribs > 0 then
-      _attribs = ffi.new("EGLint[?]", nattribs*2+1)
-      local i = 0
-      for k,v in pairs(attribs) do
-         _attribs[i] = k
-         _attribs[i+1] = v
-         i=i+2
-      end
-      _attribs[i] = egl.EGL_NONE
-   end
-   local s = egl.eglCreateWindowSurface(dpy, config.config, win, _attribs)
-   if s == nil then
-      error("eglCreateWindowSurface() failed")
-   end
-   return ffi.new("piper_egl_EGLSurface_Wrapper", dpy, s)
-end
-
-function egl.destroySurface(dpy, surface)
-   egl.eglDestroySurface(dpy, surface.surface)
+function egl.window_surface(...)
+   return egl.surface('window', ...)
 end
 
 --- api ---
@@ -616,13 +627,45 @@ ffi.cdef [[
 typedef struct {
    EGLDisplay dpy;
    EGLContext context;
-} piper_egl_EGLContext_Wrapper;
+} piper_egl_context;
 ]]
 
-local piper_egl_EGLContext_Wrapper_mt = {
-   __index = function(wrapper,name)
+local piper_egl_context_methods = {
+   destroy = function(self)
+      return egl.eglDestroyContext(self.dpy, self.context)
+   end,
+   makeCurrent = function(self, draw, read)
+      local rv = egl.eglMakeCurrent(self.dpy, draw.surface, read.surface, self.context)
+      assert(rv == egl.EGL_TRUE, "eglMakeCurrent() failed")
+      return rv
+   end,
+   release = function(self)
+      local rv = egl.eglMakeCurrent(self.dpy, nil, nil, nil)
+      assert(rv == egl.EGL_FALSE, "eglMakeCurrent() failed")
+      return rv
+   end,
+}
+
+local piper_egl_context_mt = {
+   __new = function(ct, dpy, config, share_context)
+      share_context = share_context and share_context.context
+      local attrib_list = ffi.new("EGLint[3]")
+      if egl.eglQueryAPI() == egl.EGL_OPENGL_ES_API then
+         attrib_list[0] = egl.EGL_CONTEXT_CLIENT_VERSION
+         attrib_list[1] = 2
+         attrib_list[2] = egl.EGL_NONE
+      else
+         attrib_list[0] = egl.EGL_NONE
+      end
+      local ctx = egl.eglCreateContext(dpy, config.config, share_context, attrib_list)
+      assert(ctx, "eglCreateContext() failed")
+      return ffi.new("piper_egl_context", dpy, ctx)
+   end,
+   __index = function(self,name)
+      local m = piper_egl_context_methods[name]
+      if m then return m end
       local v = ffi.new("EGLint[1]")
-      egl.eglQueryContext(wrapper.dpy, wrapper.context, egl[egl_name(name)], v+0)
+      egl.eglQueryContext(self.dpy, self.context, egl[egl_name(name)], v+0)
       return v[0]
    end,
    __eq = function(this,that)
@@ -630,69 +673,8 @@ local piper_egl_EGLContext_Wrapper_mt = {
    end,
    __tostring = make_tostring(attribute_display.context, attribute_descriptors.context),
 }
-ffi.metatype("piper_egl_EGLContext_Wrapper", piper_egl_EGLContext_Wrapper_mt)
-
-function egl.createContext(dpy, config)
-   local share_context = nil
-   local attrib_list = ffi.new("EGLint[3]")
-   if egl.eglQueryAPI() == egl.EGL_OPENGL_ES_API then
-      attrib_list[0] = egl.EGL_CONTEXT_CLIENT_VERSION
-      attrib_list[1] = 2
-      attrib_list[2] = egl.EGL_NONE
-   else
-      attrib_list[0] = egl.EGL_NONE
-   end
-   local ctx = egl.eglCreateContext(dpy, config.config, share_context, attrib_list)
-   if ctx == nil then
-      error("eglCreateContext() failed")
-   end
-   return ffi.new("piper_egl_EGLContext_Wrapper", dpy, ctx)
-end
-
-function egl.destroyContext(dpy, ctx)
-   egl.eglDestroyContext(dpy, ctx.context)
-end
-
-local current = {}
-
-function egl.makeCurrent(dpy, draw, read, ctx)
-   local rv = egl.eglMakeCurrent(dpy, draw.surface, read.surface, ctx.context)
-   if rv == egl.EGL_FALSE then
-      error("eglMakeCurrent() failed")
-   end
-   local api = tonumber(egl.eglQueryAPI())
-   assert(api == egl.EGL_OPENVG_API or api == egl.EGL_OPENGL_ES_API)
-   current[dpy] = current[dpy] or {}
-   current[dpy][api] = {
-      [egl.EGL_DRAW] = draw,
-      [egl.EGL_READ] = read,
-      ctx = ctx,
-   }
-end
-
-function egl.releaseContext(dpy)
-   egl.makeCurrent(dpy, nil, nil, nil)
-end
-
-function egl.getCurrentContext(dpy)
-   local api = tonumber(egl.eglQueryAPI())
-   if current[dpy][api] then
-      return current[dpy][api].ctx
-   else
-      return nil
-   end
-end
-
-function egl.getCurrentSurface(dpy, readdraw)
-   local api = tonumber(egl.eglQueryAPI())
-   if current[dpy][api] then
-      return current[dpy][api][readdraw]
-   else
-      return nil
-   end
-end
-
-egl.getCurrentDisplay = egl.eglGetCurrentDisplay
+ffi.metatype("piper_egl_context", piper_egl_context_mt)
+egl.context = ffi.typeof("piper_egl_context")
 
 function egl.swapBuffers(dpy, surface)
    egl.eglSwapBuffers(dpy, surface.surface)

@@ -2,16 +2,17 @@ local ffi = require("ffi")
 local format = string.format
 
 -- rpi userland libraries
-local rpi_libs = { "bcm_host",
-		   "EGL",
-		   "GLESv2",
-		   "mmal",
-		   "mmal_vc_client",
-		   "openmaxil",
-		   "OpenVG",
-		   "vchiq_arm",
-		   "vcos",
-		   "WFC",
+local rpi_libs = {
+   "bcm_host",
+   "EGL",
+   "GLESv2",
+   "mmal",
+   "mmal_vc_client",
+   "openmaxil",
+   "OpenVG",
+   "vchiq_arm",
+   "vcos",
+   "WFC",
 }
 
 local ffi_namespace = 'lib'

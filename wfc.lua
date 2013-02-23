@@ -240,7 +240,7 @@ bool wfc_client_ipc_deinit(void);
 ]]
 
 require("lib.vchiq_arm")
-local wfc = setmetatable({_NAME="wfc"},
+local wfc = setmetatable({ _NAME = "wfc" },
                          { __index = require("lib.WFC") })
 
 return wfc

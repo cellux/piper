@@ -565,7 +565,7 @@ static const int GL_INVALID_FRAMEBUFFER_OPERATION  = 0x0506;
 
 ]]
 
-local gl = setmetatable({_NAME="gl"},
+local gl = setmetatable({ _NAME = "gl" },
                         { __index = require("lib.GLESv2") })
 
 return gl

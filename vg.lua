@@ -765,17 +765,17 @@ VGUErrorCode vguComputeWarpQuadToQuad(VGfloat dx0, VGfloat dy0,
 
 ]]
 
-local vg = setmetatable({_NAME="vg"},
+local vg = setmetatable({ _NAME = "vg" },
                         { __index = require("lib.OpenVG") })
 
-local vg_error_strings = {}
+local VGErrorCode_map = {}
 for _,n in ipairs({"NO","BAD_HANDLE","ILLEGAL_ARGUMENT","OUT_OF_MEMORY","PATH_CAPABILITY","UNSUPPORTED_IMAGE_FORMAT","UNSUPPORTED_PATH_FORMAT","IMAGE_IN_USE","NO_CONTEXT"}) do
    local const_name = "VG_"..n.."_ERROR"
-   vg_error_strings[tonumber(vg[const_name])] = const_name
+   VGErrorCode_map[tonumber(vg[const_name])] = const_name
 end
 
-function vg.error_string(code)
-   return vg_error_strings[tonumber(code)]
+function vg.VGErrorCode_str(code)
+   return VGErrorCode_map[tonumber(code)] or '?'
 end
 
 return vg

@@ -517,7 +517,7 @@ typedef struct {
 -- bcm_host depends on vcos
 require("lib.vcos")
 local lib_bcm_host = require("lib.bcm_host")
-local bcm_host = setmetatable({_NAME="bcm_host"},
+local bcm_host = setmetatable({ _NAME = "bcm_host" },
                               { __index = lib_bcm_host })
 
 function bcm_host.wrap(f)
@@ -528,17 +528,6 @@ function bcm_host.wrap(f)
       if not rv then error(e,0) end
    end
    return w
-end
-
-function bcm_host.vc_dispmanx_element_add(u,d,l,dr,s,sr,p,a,c,t)
-   -- if source rect's width and height are in the lower 16 bits of the uint32_t,
-   -- shift them up to the higher 16 bits as vc_dispmanx_element_add requires that
-   local sr_shifted = ffi.new("VC_RECT_T", sr)
-   if bit.band(sr_shifted.width,0xffff) ~= 0 then
-      sr_shifted.width = bit.lshift(sr_shifted.width, 16)
-      sr_shifted.height = bit.lshift(sr_shifted.height, 16)
-   end
-   return lib_bcm_host.vc_dispmanx_element_add(u,d,l,dr,s,sr_shifted,p,a,c,t)
 end
 
 return bcm_host
