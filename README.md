@@ -1,5 +1,7 @@
 # Piper - a demo framework for the Raspberry Pi
 
+Note: this project has been abandoned. It's successor is [ZZ](http://github.com/cellux/zz).
+
 (warning this is highly experimental stuff - at its present stage, there is no guarantee that it will work)
 
 The idea is to create a framework which lets me play with OpenGL ES, OpenVG and OpenMAX IL from LuaJIT.
